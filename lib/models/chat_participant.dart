@@ -48,4 +48,13 @@ class UserProfile {
       email: json['email'],
     );
   }
-}
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'full_name': fullName,
+      'avatar_url': avatarUrl,
+      'email': email,
+    };
+  }
+  }

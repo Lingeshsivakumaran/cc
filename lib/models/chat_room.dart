@@ -1,4 +1,7 @@
-// In lib/models/chat_room.dart
+// lib/models/chat_room.dart
+import 'chat_participant.dart';
+import 'message.dart';         // Add this import
+
 class ChatRoom {
   final String id;
   final DateTime createdAt;

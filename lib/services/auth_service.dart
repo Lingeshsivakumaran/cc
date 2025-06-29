@@ -1,20 +1,14 @@
-// lib/services/auth_service.dart
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: '526220793959-iv8rcb9vc9s9asj4vsqp9moh36ulm9nh.apps.googleusercontent.com', // Replace with your actual server client ID
+    serverClientId: '526220793959-iv8rcb9vc9s9asj4vsqp9moh36ulm9nh.apps.googleusercontent.com',
   );
 
-  // Get current user
   User? get currentUser => _supabase.auth.currentUser;
-
-  // Check if user is signed in
   bool get isSignedIn => _supabase.auth.currentUser != null;
-
-  // Listen to auth state changes
   Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
 
   Future<AuthResponse?> signInWithGoogle() async {
@@ -53,7 +47,6 @@ class AuthService {
 
   Future<void> _createUserProfile(User user) async {
     try {
-      // Check if profile already exists
       final existingProfile = await _supabase
           .from('profiles')
           .select()
@@ -61,7 +54,6 @@ class AuthService {
           .maybeSingle();
 
       if (existingProfile == null) {
-        // Create new profile
         await _supabase.from('profiles').insert({
           'id': user.id,
           'email': user.email,
@@ -70,10 +62,16 @@ class AuthService {
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         });
+      } else {
+        // Update existing profile with latest info
+        await _supabase.from('profiles').update({
+          'full_name': user.userMetadata?['full_name'] ?? user.userMetadata?['name'] ?? existingProfile['full_name'],
+          'avatar_url': user.userMetadata?['avatar_url'] ?? user.userMetadata?['picture'] ?? existingProfile['avatar_url'],
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', user.id);
       }
     } catch (e) {
-      print('Error creating user profile: $e');
-      // Don't throw here as the user is already signed in
+      print('Error creating/updating user profile: $e');
     }
   }
 
