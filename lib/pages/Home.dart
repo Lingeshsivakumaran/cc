@@ -14,23 +14,35 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final ChatService _chatService = ChatService();
   final TextEditingController _searchController = TextEditingController();
   List<ChatRoom> _allChatRooms = [];
   List<ChatRoom> _filteredChatRooms = [];
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    
     _loadChatRooms();
     _searchController.addListener(_filterChatRooms);
+    _animationController.forward();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -57,13 +69,22 @@ class _HomeState extends State<Home> {
   void _navigateToChat(ChatRoom chatRoom) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => ChatPage(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => ChatPage(
           roomId: chatRoom.id,
           chatTitle: chatRoom.getOtherParticipantName(
             _authService.currentUser?.id ?? ''
           ),
         ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: animation.drive(
+              Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
+                  .chain(CurveTween(curve: Curves.easeInOut)),
+            ),
+            child: child,
+          );
+        },
       ),
     ).then((_) => _loadChatRooms());
   }
@@ -71,7 +92,18 @@ class _HomeState extends State<Home> {
   void _navigateToNewChat() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const NewChatPage()),
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const NewChatPage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return ScaleTransition(
+            scale: animation.drive(
+              Tween(begin: 0.8, end: 1.0)
+                  .chain(CurveTween(curve: Curves.elasticOut)),
+            ),
+            child: child,
+          );
+        },
+      ),
     ).then((_) => _loadChatRooms());
   }
 
@@ -94,272 +126,493 @@ class _HomeState extends State<Home> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildProfileSection() {
     final user = _authService.currentUser;
-    
-    return Scaffold(
-      body: Container(
-        margin: const EdgeInsets.only(top: 50, left: 20, right: 20),
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            // Top row with profile and new chat icons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.blue.shade50,
+            Colors.purple.shade50,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          GestureDetector(
+            onTap: _signOut,
+            child: Row(
               children: [
-                GestureDetector(
-                  onTap: _signOut,
+                Hero(
+                  tag: 'profile_avatar',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 25,
+                      backgroundColor: Colors.deepPurple.shade200,
+                      backgroundImage: user?.userMetadata?['avatar_url'] != null
+                          ? NetworkImage(user!.userMetadata!['avatar_url'])
+                          : null,
+                      child: user?.userMetadata?['avatar_url'] == null
+                          ? Text(
+                              user?.userMetadata?['full_name']?.toString().substring(0, 1).toUpperCase() ?? 'U',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: Colors.white,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage: user?.userMetadata?['avatar_url'] != null
-                            ? NetworkImage(user!.userMetadata!['avatar_url'])
-                            : null,
-                        child: user?.userMetadata?['avatar_url'] == null
-                            ? Text(
-                                user?.userMetadata?['full_name']?.toString().substring(0, 1).toUpperCase() ?? 'U',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              )
-                            : null,
+                      Icon(Icons.logout, size: 16, color: Colors.red.shade600),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Sign Out',
+                        style: TextStyle(
+                          color: Colors.red.shade600,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.logout, size: 20, color: Colors.red),
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: _navigateToNewChat,
-                  child: const Icon(Icons.add_comment, size: 30, color: Colors.blue),
-                ),
               ],
             ),
-            const SizedBox(height: 20),
-            
-            // Welcome text
-            Row(
-              children: [
-                const Text(
-                  "Welcome to",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w400),
+          ),
+          GestureDetector(
+            onTap: _navigateToNewChat,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade400, Colors.purple.shade400],
                 ),
-              ],
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.add_comment_rounded,
+                size: 24,
+                color: Colors.white,
+              ),
             ),
-            Row(
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWelcomeSection() {
+    final user = _authService.currentUser;
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(
               children: [
-                const Text(
-                  "ChatApp",
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                TextSpan(
+                  text: "Welcome to ",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w300,
+                    color: Colors.grey.shade700,
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            
-            // Greeting with user name
-            Row(
-              children: [
-                Image.asset(
-                  "images/wave.png",
-                  width: 50, 
-                  height: 90, 
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.waving_hand, size: 50, color: Colors.orange);
-                  },
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    "Hello, ${user?.userMetadata?['full_name'] ?? 'User'}!",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.left,
+                TextSpan(
+                  text: "ChatApp",
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    foreground: Paint()
+                      ..shader = LinearGradient(
+                        colors: [Colors.blue.shade600, Colors.purple.shade600],
+                      ).createShader(const Rect.fromLTWH(0.0, 0.0, 200.0, 70.0)),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 30),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 1200),
+                builder: (context, value, child) {
+                  return Transform.rotate(
+                    angle: value * 0.5,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Image.asset(
+                    "images/wave.png",
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.waving_hand,
+                        size: 40,
+                        color: Colors.orange.shade600,
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Hello there!",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    Text(
+                      "${user?.userMetadata?['full_name'] ?? 'User'}",
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400),
+          hintText: "Search conversations...",
+          hintStyle: TextStyle(color: Colors.grey.shade400),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        ),
+        style: const TextStyle(fontSize: 16),
+      ),
+    );
+  }
+
+  Widget _buildChatItem(ChatRoom chatRoom, int index) {
+    final currentUserId = _authService.currentUser?.id ?? '';
+    final participantName = chatRoom.getOtherParticipantName(currentUserId);
+    final participantAvatar = chatRoom.getOtherParticipantAvatar(currentUserId);
+    
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 200 + (index * 100)),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(50 * (1 - value), 0),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+      child: GestureDetector(
+        onTap: () => _navigateToChat(chatRoom),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _navigateToChat(chatRoom),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Hero(
+                      tag: 'chat_avatar_${chatRoom.id}',
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: participantAvatar != null
+                              ? Image.network(
+                                  participantAvatar,
+                                  height: 56,
+                                  width: 56,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return _buildAvatarFallback(participantName);
+                                  },
+                                )
+                              : _buildAvatarFallback(participantName),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            participantName,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            chatRoom.lastMessage?.content ?? "No messages yet",
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                              height: 1.3,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            chatRoom.lastMessage != null
+                                ? _formatTime(chatRoom.lastMessage!.createdAt)
+                                : _formatTime(chatRoom.createdAt),
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: Colors.grey.shade400,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarFallback(String name) {
+    return Container(
+      height: 56,
+      width: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.deepPurple.shade400, Colors.blue.shade400],
+        ),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'U',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            _allChatRooms.isEmpty 
+                ? "No conversations yet"
+                : "No chats found",
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _allChatRooms.isEmpty 
+                ? "Tap the + button to start your first chat"
+                : "Try a different search term",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _buildProfileSection(),
+                  const SizedBox(height: 24),
+                  _buildWelcomeSection(),
+                ],
+              ),
+            ),
             
-            // Chat list container
             Expanded(
               child: Container(
-                width: MediaQuery.of(context).size.width,
-                decoration: const BoxDecoration(
-                  color: Colors.amberAccent,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(30),
-                    topRight: Radius.circular(30),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.amber.shade100,
+                      Colors.orange.shade100,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(32),
+                    topRight: Radius.circular(32),
                   ),
                 ),
                 child: Column(
                   children: [
-                    const SizedBox(height: 30.0),
-                    
-                    // Search bar
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          prefixIcon: Icon(Icons.search),
-                          hintText: "Search chats",
-                          contentPadding: EdgeInsets.symmetric(horizontal: 15),
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 20),
+                    _buildSearchBar(),
+                    const SizedBox(height: 10),
                     
-                    // Chat list
                     Expanded(
                       child: _filteredChatRooms.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.chat_bubble_outline,
-                                    size: 64,
-                                    color: Colors.white70,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    _allChatRooms.isEmpty 
-                                        ? "No chats yet\nTap + to start a new conversation"
-                                        : "No chats found",
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
+                          ? _buildEmptyState()
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              padding: const EdgeInsets.only(bottom: 20),
                               itemCount: _filteredChatRooms.length,
                               itemBuilder: (context, index) {
-                                final chatRoom = _filteredChatRooms[index];
-                                final currentUserId = _authService.currentUser?.id ?? '';
-                                final participantName = chatRoom.getOtherParticipantName(currentUserId);
-                                final participantAvatar = chatRoom.getOtherParticipantAvatar(currentUserId);
-                                
-                                return GestureDetector(
-                                  onTap: () => _navigateToChat(chatRoom),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    padding: const EdgeInsets.all(10),
-                                    margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                                    child: Row(
-                                      children: [
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(25),
-                                          child: participantAvatar != null
-                                              ? Image.network(
-                                                  participantAvatar,
-                                                  height: 50,
-                                                  width: 50,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) {
-                                                    return Container(
-                                                      height: 50,
-                                                      width: 50,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.deepPurple,
-                                                        borderRadius: BorderRadius.circular(25),
-                                                      ),
-                                                      child: Center(
-                                                        child: Text(
-                                                          participantName.substring(0, 1).toUpperCase(),
-                                                          style: const TextStyle(
-                                                            color: Colors.white,
-                                                            fontWeight: FontWeight.bold,
-                                                            fontSize: 20,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                                )
-                                              : Container(
-                                                  height: 50,
-                                                  width: 50,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.deepPurple,
-                                                    borderRadius: BorderRadius.circular(25),
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      participantName.isNotEmpty 
-                                                          ? participantName.substring(0, 1).toUpperCase()
-                                                          : 'U',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight: FontWeight.bold,
-                                                        fontSize: 20,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                participantName,
-                                                style: const TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 16.0,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 5),
-                                              Text(
-                                                chatRoom.lastMessage?.content ?? "No messages yet",
-                                                style: const TextStyle(
-                                                  color: CupertinoColors.secondaryLabel,
-                                                  fontSize: 14.0,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 1,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              chatRoom.lastMessage != null
-                                                  ? _formatTime(chatRoom.lastMessage!.createdAt)
-                                                  : _formatTime(chatRoom.createdAt),
-                                              style: const TextStyle(
-                                                color: CupertinoColors.secondaryLabel,
-                                                fontSize: 12.0,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 5),
-                                            const Icon(
-                                              Icons.chevron_right,
-                                              size: 16,
-                                              color: Colors.grey,
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
+                                return _buildChatItem(_filteredChatRooms[index], index);
                               },
                             ),
                     ),
