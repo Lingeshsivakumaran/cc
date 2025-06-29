@@ -1,136 +1,56 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../config/supabase_config.dart';
-import '../models/message.dart';
-import '../models/chat_room.dart' as chat_room_model;
+Future<String?> createOrGetChatRoom(String otherUserId) async {
+  try {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) return null;
 
-class ChatService {
-  final SupabaseClient _supabase = SupabaseConfig.client;
+    // Check if chat room already exists between these two users
+    final existingRooms = await _supabase
+        .from('chat_participants')
+        .select('room_id, user_id')
+        .in_('user_id', [currentUserId, otherUserId]);
 
-  // Get all chat rooms for current user
-  Future<List<ChatRoom>> getChatRooms() async {
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return [];
-
-      final response = await _supabase
-          .from('chat_rooms')
-          .select('''
-            *,
-            participants:chat_participants(
-              user_id,
-              profiles:profiles(id, full_name, avatar_url)
-            ),
-            last_message:messages(content, created_at, sender_id)
-          ''')
-          .eq('chat_participants.user_id', userId)
-          .order('updated_at', ascending: false);
-
-      return (response as List<Map<String, dynamic>>).map((data) => chat_room_model.ChatRoom.fromJson(data)).toList();
-    } catch (e) {
-      print('Error getting chat rooms: $e');
-      return [];
-    }
-  }
-
-  // Create or get existing chat room
-  Future<String?> createOrGetChatRoom(String otherUserId) async {
-    try {
-      final currentUserId = _supabase.auth.currentUser?.id;
-      if (currentUserId == null) return null;
-
-      // Check if chat room already exists
-      final existingRoom = await _supabase
-          .from('chat_participants')
-          .select('room_id')
-          .contains('user_id', [currentUserId, otherUserId])
-          .then((response) {
-            final groupedRooms = (response as List<dynamic>)
-                .where((room) => room['user_id'].length == 2)
-                .toList();
-            return groupedRooms.isNotEmpty ? groupedRooms.first : null;
-          })
-          .then((response) => response.isNotEmpty ? response.first : null);
-
-      if (existingRoom != null) {
-        return existingRoom['room_id'];
+    if (existingRooms.isNotEmpty) {
+      // Group by room_id and count participants
+      final roomCounts = <String, int>{};
+      for (final room in existingRooms) {
+        final roomId = room['room_id'] as String;
+        roomCounts[roomId] = (roomCounts[roomId] ?? 0) + 1;
       }
 
-      // Create new chat room
-      final roomResponse = await _supabase
-          .from('chat_rooms')
-          .insert({
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .select()
-          .single();
+      // Find a room with exactly 2 participants (both users)
+      final existingRoomId = roomCounts.entries
+          .firstWhere(
+            (entry) => entry.value == 2,
+            orElse: () => null,
+          )
+          ?.key;
 
-      final roomId = roomResponse['id'];
-
-      // Add participants
-      await _supabase.from('chat_participants').insert([
-        {'room_id': roomId, 'user_id': currentUserId},
-        {'room_id': roomId, 'user_id': otherUserId},
-      ]);
-
-      return roomId;
-    } catch (e) {
-      print('Error creating chat room: $e');
-      return null;
+      if (existingRoomId != null) {
+        return existingRoomId;
+      }
     }
-  }
 
-  // Get messages for a chat room
-  Stream<List<Message>> getMessages(String roomId) {
-    return _supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('room_id', roomId)
-        .order('created_at', ascending: true)
-        .map((data) => data.map((json) => Message.fromJson(json)).toList());
-  }
+    // Create new chat room
+    final roomResponse = await _supabase
+        .from('chat_rooms')
+        .insert({
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .select()
+        .single();
 
-  // Send a message
-  Future<bool> sendMessage(String roomId, String content) async {
-    try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return false;
+    final roomId = roomResponse['id'];
 
-      await _supabase.from('messages').insert({
-        'room_id': roomId,
-        'sender_id': userId,
-        'content': content,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+    // Add participants
+    await _supabase.from('chat_participants').insert([
+      {'room_id': roomId, 'user_id': currentUserId},
+      {'room_id': roomId, 'user_id': otherUserId},
+    ]);
 
-      // Update chat room's last activity
-      await _supabase
-          .from('chat_rooms')
-          .update({'updated_at': DateTime.now().toIso8601String()})
-          .eq('id', roomId);
-
-      return true;
-    } catch (e) {
-      print('Error sending message: $e');
-      return false;
-    }
-  }
-
-  // Get all users (for starting new chats)
-  Future<List<Map<String, dynamic>>> getAllUsers() async {
-    try {
-      final currentUserId = _supabase.auth.currentUser?.id;
-      if (currentUserId == null) return [];
-
-      final response = await _supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, email')
-          .neq('id', currentUserId);
-
-      return response;
-    } catch (e) {
-      print('Error getting users: $e');
-      return [];
-    }
+    return roomId;
+  } catch (e) {
+    print('Error creating chat room: $e');
+    return null;
   }
 }

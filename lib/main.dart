@@ -1,5 +1,6 @@
 import 'package:cc/pages/chat_page.dart';
-import 'package:cc/pages/home.dart';
+// ✅ Fixed
+import 'package:cc/pages/Home.dart';
 import 'package:cc/pages/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'config/supabase_config.dart';

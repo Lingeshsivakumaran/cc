@@ -2,8 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
   // Replace these with your actual Supabase project credentials
-  static const String supabaseUrl = 'YOUR_SUPABASE_URL';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+  static const String supabaseUrl = 'https://umwhpmzmrgmevgpmklvx.supabase.co';
+  static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_KEY'); // Fetch from environment variables
   
   static Future<void> initialize() async {
     await Supabase.initialize(
