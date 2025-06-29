@@ -1,3 +1,5 @@
+import 'package:cc/pages/chat_page.dart';
+import 'package:cc/pages/home.dart';
 import 'package:cc/pages/onboarding.dart';
 import 'package:flutter/material.dart';
 
@@ -16,7 +18,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const Onboarding(), // Added const keyword
+      home: ChatPage(), // Added const keyword
     );
   }
 }
