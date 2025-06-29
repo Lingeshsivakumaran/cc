@@ -1,4 +1,6 @@
-import'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+
 class Onboarding extends StatefulWidget {
   const Onboarding({super.key});
 
@@ -6,10 +8,43 @@ class Onboarding extends StatefulWidget {
   State<Onboarding> createState() => _OnboardingState();
 }
 
- @override
-  State<Onboarding> createState() => _OnboardingState();
-
 class _OnboardingState extends State<Onboarding> {
+  final AuthService _authService = AuthService();
+  bool _isLoading = false;
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await _authService.signInWithGoogle();
+      if (response == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sign-in was cancelled'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign-in failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -30,9 +65,13 @@ class _OnboardingState extends State<Onboarding> {
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                          Icon(Icons.chat_bubble_outline, size: 64, color: Colors.deepPurple),
                           SizedBox(height: 8),
-                          Text('Image not found', style: TextStyle(color: Colors.grey)),
+                          Text('Chat App', style: TextStyle(
+                            color: Colors.deepPurple,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          )),
                         ],
                       ),
                     );
@@ -62,36 +101,60 @@ class _OnboardingState extends State<Onboarding> {
                     
                     const SizedBox(height: 30),
                     
-                    // Button
-                    Container(
-                      margin: EdgeInsets.only(left: 20, right: 20),
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-                      width: MediaQuery.of(context).size.width * 0.8,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(20.0),
-                      ),
-
-
-                    child: Row(
-                  
-                      children: [
-                      
-                      Image.asset("images/search.png", width: 30, height: 30),
-                      SizedBox(width: 20.0,),
-                      Text("sign in with Google",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18.0,
-                          fontWeight: FontWeight.bold,
-                          
+                    // Google Sign-in Button
+                    GestureDetector(
+                      onTap: _isLoading ? null : _signInWithGoogle,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                        width: MediaQuery.of(context).size.width * 0.8,
+                        height: 55,
+                        decoration: BoxDecoration(
+                          color: _isLoading ? Colors.grey : Colors.blue,
+                          borderRadius: BorderRadius.circular(20.0),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              spreadRadius: 1,
+                              blurRadius: 5,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
-                        textAlign: TextAlign.center,
-
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_isLoading)
+                              const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            else ...[
+                              Image.asset(
+                                "images/search.png", 
+                                width: 24, 
+                                height: 24,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(Icons.login, color: Colors.white, size: 24);
+                                },
+                              ),
+                              const SizedBox(width: 12.0),
+                              const Text(
+                                "Sign in with Google",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16.0,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                      
-                    ],),
                     ),
                   ],
                 ),
