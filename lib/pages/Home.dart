@@ -22,6 +22,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   List<ChatRoom> _filteredChatRooms = [];
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -47,11 +48,33 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   }
 
   Future<void> _loadChatRooms() async {
-    final chatRooms = await _chatService.getChatRooms();
-    setState(() {
-      _allChatRooms = chatRooms.cast<ChatRoom>();
-      _filteredChatRooms = chatRooms.cast<ChatRoom>();
-    });
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+      
+      final chatRooms = await _chatService.getChatRooms();
+      
+      if (mounted) {
+        setState(() {
+          _allChatRooms = chatRooms.cast<ChatRoom>();
+          _filteredChatRooms = chatRooms.cast<ChatRoom>();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load chats: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _filterChatRooms() {
@@ -108,7 +131,18 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   }
 
   Future<void> _signOut() async {
-    await _authService.signOut();
+    try {
+      await _authService.signOut();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sign out failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   String _formatTime(DateTime dateTime) {
@@ -152,7 +186,28 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
-            onTap: _signOut,
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Sign Out'),
+                  content: const Text('Are you sure you want to sign out?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _signOut();
+                      },
+                      child: const Text('Sign Out'),
+                    ),
+                  ],
+                ),
+              );
+            },
             child: Row(
               children: [
                 Hero(
@@ -292,18 +347,10 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     color: Colors.orange.shade100,
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: Image.asset(
-                    "images/wave.png",
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.waving_hand,
-                        size: 40,
-                        color: Colors.orange.shade600,
-                      );
-                    },
+                  child: Icon(
+                    Icons.waving_hand,
+                    size: 40,
+                    color: Colors.orange.shade600,
                   ),
                 ),
               ),
@@ -321,7 +368,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                       ),
                     ),
                     Text(
-                      "${user?.userMetadata?['full_name'] ?? 'User'}",
+                      "${user?.userMetadata?['full_name'] ?? user?.userMetadata?['name'] ?? 'User'}",
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -606,15 +653,20 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                     const SizedBox(height: 10),
                     
                     Expanded(
-                      child: _filteredChatRooms.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              itemCount: _filteredChatRooms.length,
-                              itemBuilder: (context, index) {
-                                return _buildChatItem(_filteredChatRooms[index], index);
-                              },
-                            ),
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _filteredChatRooms.isEmpty
+                              ? _buildEmptyState()
+                              : RefreshIndicator(
+                                  onRefresh: _loadChatRooms,
+                                  child: ListView.builder(
+                                    padding: const EdgeInsets.only(bottom: 20),
+                                    itemCount: _filteredChatRooms.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildChatItem(_filteredChatRooms[index], index);
+                                    },
+                                  ),
+                                ),
                     ),
                   ],
                 ),
